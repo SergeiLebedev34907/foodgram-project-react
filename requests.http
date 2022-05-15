@@ -1,4 +1,4 @@
-GET http://51.250.103.49/api/users/
+GET http://51.250.103.49/api/users/1/
 Content-Type: application/json
 
 ###
@@ -23,7 +23,7 @@ Content-Type: application/json
 }
 
 ###
-# superuser “4449b9fb0cfe18e2bb2c0f0b3297584a96d48fff“
+# superuser “7ec7206f5cb749898bbf1b36fe6110fb76829e13“
 # user1 “330af76e7c2f4d5f7d8c38b4e8cfb38f9d687589“
 # user2 “380751fb699e1921a629e094b68e5d7a678b4ea0“
 # user3 “ed7b2728116f1386d7b9002a807fe2a353b66fb3“
@@ -40,9 +40,9 @@ GET http://51.250.103.49/api/ingredients/
 Content-Type: application/json
 
 ###
-GET http://51.250.103.49/api/recipes/?is_favorited=1
+GET http://51.250.103.49/api/recipes/?page=1&limit=6&tags=breakfast&tags=lunch&tags=dinner
 Content-Type: application/json
-Authorization: Token 4449b9fb0cfe18e2bb2c0f0b3297584a96d48fff
+Authorization: Token 7ec7206f5cb749898bbf1b36fe6110fb76829e13
 
 ###
 POST http://51.250.103.49/api/recipes/
@@ -94,7 +94,3 @@ Content-Type: application/json
 GET http://51.250.103.49/api/recipes/download_shopping_cart/
 Content-Type: application/json
 Authorization: Token e3ffc0bf7cdb039704d5fdaf00ec6f8911e3b539
-
-###
-# scp infra/docker-compose.yaml sergei_lebedev@51.250.103.49:~/
-# scp -r infra/nginx sergei_lebedev@51.250.103.49:~/
