@@ -43,28 +43,11 @@ class IngredientsViewSet(ReadOnlyModelViewSet):
 
 
 class RecipesViewSet(ModelViewSet):
+    queryset = models.Recipe.objects.all()
     serializer_class = serializers.RecipeSerializer
     filter_backends = (DjangoFilterBackend,)
     filterset_class = RecipeFilter
     pagination_classes = PageNumberLimitPagination
-
-    def get_queryset(self):
-        queryset = models.Recipe.objects.all()
-
-        query_dct = self.request._request.GET
-        if query_dct and self.request._auth:
-            favorite_recipe_st = query_dct.get("is_favorited")
-            if favorite_recipe_st == "1":
-                queryset = queryset.filter(
-                    favorite_recipe__user=self.request.user
-                )
-
-            is_in_shopping_cart_st = query_dct.get("is_in_shopping_cart")
-            if is_in_shopping_cart_st == "1":
-                queryset = queryset.filter(
-                    shopping_cart_recipe__user=self.request.user
-                )
-        return queryset
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)
@@ -106,11 +89,7 @@ class RecipesViewSet(ModelViewSet):
 
 
 class CreateViewSet(CreateModelMixin, GenericViewSet):
-    def get_serializer(self):
-        pass
-
-    def get_queryset(self):
-        pass
+    ...
 
 
 class FavoriteViewSet(CreateViewSet):
@@ -184,7 +163,7 @@ class FollowViewSet(CreateViewSet):
         )
         serializer = serializers.UserSubscribeSerializer(
             author,
-            context=self.get_serializer_context(),  # get_renderer_context()
+            context=self.get_serializer_context(),
         )
         headers = self.get_success_headers(serializer.data)
         return Response(

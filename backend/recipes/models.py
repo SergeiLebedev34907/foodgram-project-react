@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.core.validators import MinValueValidator
 from django.db import models
 
 User = get_user_model()
@@ -109,16 +110,20 @@ class Recipe(models.Model):
     name = models.CharField(max_length=200, verbose_name="Название")
     image = models.ImageField(
         upload_to="recipes/images/",
-        verbose_name="Картинка",
-        blank=True,  # Удалить
-        null=True,
+        verbose_name="Картинка"
     )
     text = models.TextField(
         max_length=400,
         verbose_name="Текстовое описание",
     )
     cooking_time = models.PositiveSmallIntegerField(
-        verbose_name="Время приготовления в минутах"
+        verbose_name="Время приготовления в минутах",
+        validators=[
+            MinValueValidator(
+                1,
+                message="Убедитесь, что значение больше 0."
+            ),
+        ]
     )
 
     class Meta:
@@ -167,7 +172,17 @@ class IngredientRecipe(models.Model):
         on_delete=models.CASCADE,
         related_name="amount_recipes",
     )
-    amount = models.PositiveSmallIntegerField(verbose_name="Количество")
+    amount = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        verbose_name="Количество",
+        validators=[
+            MinValueValidator(
+                0,
+                message="Убедитесь, что значение больше 0."
+            ),
+        ]
+    )
 
     class Meta:
         constraints = [

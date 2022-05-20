@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from djoser.serializers import UserCreateSerializer
 from drf_extra_fields.fields import Base64ImageField
 from recipes import models
@@ -6,6 +7,7 @@ from rest_framework.serializers import (
     ModelSerializer,
     PrimaryKeyRelatedField,
     SerializerMethodField,
+    ReadOnlyField,
 )
 
 User = get_user_model()
@@ -59,22 +61,13 @@ class IngredientSerializer(ModelSerializer):
 
 
 class IngredientReedRecipeSerializer(ModelSerializer):
-    id = SerializerMethodField()
-    name = SerializerMethodField()
-    measurement_unit = SerializerMethodField()
+    id = ReadOnlyField(source="ingredient.id")
+    name = ReadOnlyField(source="ingredient.name")
+    measurement_unit = ReadOnlyField(source="ingredient.measurement_unit")
 
     class Meta:
         model = models.IngredientRecipe
         fields = ("id", "name", "measurement_unit", "amount")
-
-    def get_id(self, obj):
-        return obj.ingredient.id
-
-    def get_name(self, obj):
-        return obj.ingredient.name
-
-    def get_measurement_unit(self, obj):
-        return obj.ingredient.measurement_unit
 
 
 class IngredientRecipeSerializer(IngredientReedRecipeSerializer):
@@ -128,28 +121,40 @@ class RecipeReadSerializer(ModelSerializer):
 
 
 class RecipeSerializer(RecipeReadSerializer):
-    tags = PrimaryKeyRelatedField(queryset=models.Tag.objects.all(), many=True)
+    tags = PrimaryKeyRelatedField(
+        queryset=models.Tag.objects.all(),
+        many=True
+    )
 
     def to_representation(self, instance):
         return RecipeReadSerializer(instance, context=self._context).data
 
+    @transaction.atomic
     def create(self, validated_data):
         tags = validated_data.pop("tags")
         ingredients = validated_data.pop("ingredients")
         recipe = models.Recipe.objects.create(**validated_data)
 
+        recipes_tags_list = []
         for tag in tags:
-            models.TagRecipe.objects.create(tag=tag, recipe=recipe)
+            recipes_tag = models.TagRecipe(tag=tag, recipe=recipe)
+            recipes_tags_list.append(recipes_tag)
+        recipe.tag_recipe.bulk_create(recipes_tags_list)
 
-        for ingredient in ingredients:
-            amount = ingredient.get("amount")
-            ingr = ingredient.get("ingredient")
-            print(ingr, amount)
-            models.IngredientRecipe.objects.create(
-                recipe=recipe, ingredient=ingr, amount=amount
+        recipes_ingredients_list = []
+        for recipes_ingredient in ingredients:
+            ingr = recipes_ingredient.get("ingredient")
+            amount = recipes_ingredient.get("amount")
+            recipes_ingredient = models.IngredientRecipe(
+                ingredient=ingr,
+                amount=amount,
+                recipe=recipe
             )
+            recipes_ingredients_list.append(recipes_ingredient)
+        recipe.ingredients.bulk_create(recipes_ingredients_list)
         return recipe
 
+    @transaction.atomic
     def update(self, instance, validated_data):
         tags = validated_data.pop("tags")
         ingredients = validated_data.pop("ingredients")
@@ -157,29 +162,65 @@ class RecipeSerializer(RecipeReadSerializer):
 
         old_tags = recipe.tags.all()
         # Удаляем ненужные больше теги
+        tags_for_delete = []
         for tag in old_tags:
             if tag not in tags:
-                recipe.tag_recipe.filter(tag=tag).delete()
+                tags_for_delete.append(tag)
+        if tags_for_delete:
+            recipe.tag_recipe.filter(tag__in=tags_for_delete).delete()
 
         # Добавляем новые теги
+        recipes_tags_for_create = []
         for tag in tags:
             if tag not in old_tags:
-                recipe.tag_recipe.create(tag=tag)
-        old_ingredients_amount = recipe.ingredients.all()
+                recipes_tag = models.TagRecipe(tag=tag, recipe=recipe)
+                recipes_tags_for_create.append(recipes_tag)
+        if recipes_tags_for_create:
+            recipe.tag_recipe.bulk_create(recipes_tags_for_create)
 
-        new_ingredients_amounts = []
+        old_recipes_ingredients = recipe.ingredients.all()
+        recipes_ingredients_for_create = []
+        recipes_ingredients_for_update = []
+        new_ingredients_list = []
+        ingredients_for_delete = []
+
         for ingredient in ingredients:
             amount = ingredient.get("amount")
-            ingr = ingredient.get("ingredient")
-            recipe_ingr_am, _ = recipe.ingredients.get_or_create(
-                ingredient=ingr, amount=amount
+            ing = ingredient.get("ingredient")
+            recipes_ing = models.IngredientRecipe(
+                ingredient=ing,
+                amount=amount,
+                recipe=recipe
             )
-            new_ingredients_amounts.append(recipe_ingr_am)
+            new_ingredients_list.append(recipes_ing.ingredient)
 
-        for ingredient_amount in old_ingredients_amount:
-            if ingredient_amount not in new_ingredients_amounts:
-                ingredient_amount.delete()
-        return instance
+            qs_old_recipes_ing = old_recipes_ingredients.filter(
+                ingredient=ing
+            )
+            if not qs_old_recipes_ing.exists():
+                recipes_ingredients_for_create.append(recipes_ing)
+            else:
+                old_recipes_ing = qs_old_recipes_ing.get()
+                if old_recipes_ing.amount != amount:
+                    old_recipes_ing.amount = amount
+                    recipes_ingredients_for_update.append(old_recipes_ing)
+
+        if recipes_ingredients_for_create:
+            recipe.ingredients.bulk_create(recipes_ingredients_for_create)
+        if recipes_ingredients_for_update:
+            recipe.ingredients.bulk_update(
+                recipes_ingredients_for_update,
+                ['amount']
+            )
+
+        for recipes_ing in old_recipes_ingredients:
+            if recipes_ing.ingredient not in new_ingredients_list:
+                ingredients_for_delete.append(recipes_ing.ingredient)
+        if ingredients_for_delete:
+            recipe.ingredients.filter(
+                ingredient__in=ingredients_for_delete
+            ).delete()
+        return recipe
 
 
 class FavoriteSerializer(RecipeReadSerializer):

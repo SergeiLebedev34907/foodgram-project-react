@@ -32,9 +32,9 @@ SECRET_KEY = os.getenv(
 )
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = ["51.250.103.49", "backend"]
+ALLOWED_HOSTS = ["*"]
 
 
 # Application definition
@@ -158,6 +158,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "users.User"  # Ссылка на кастомную модель ползователя
 
 REST_FRAMEWORK = {
+    'SEARCH_PARAM': 'name',
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.TokenAuthentication",
     ],
